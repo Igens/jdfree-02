@@ -1,86 +1,52 @@
-import java.util.Scanner;
-import java.util.concurrent.TimeUnit;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.http.HttpEntity;
+import org.apache.http.client.config.RequestConfig;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
 
+import java.io.FileOutputStream;
+import java.io.IOException;
 
 public class Main {
+    //Наша ссылка, на которую будем отправлять запрос
+    public static final String URI = "https://api.nasa.gov/planetary/apod?api_key=ВАШ КЛЮЧ";
 
+    //Сущность, которая будет преобразовывать ответ в наш объект NASA
+    public static final ObjectMapper mapper = new ObjectMapper();
 
-    public static int test=0;
-    public static void main(String[] args) throws InterruptedException{
-        
-        String[] cmd = new Scanner(System.in).nextLine().split(" ");
+    public static void main(String[] args) throws IOException {
 
-        int work = 50;
-        int breake = 10;
-        int sizebreak = 30;
-        int sizework = 30;
-        int help = 0;
-        int count = 1;
+        //Настраиваем наш HTTP клиент, который будет отправлять запросы
+        CloseableHttpClient httpClient = HttpClientBuilder.create()
+                .setDefaultRequestConfig(RequestConfig.custom()
+                        .setConnectTimeout(5000)
+                        .setSocketTimeout(30000)
+                        .setRedirectsEnabled(false)
+                        .build())
+                .build();
 
-        for(int i=0; i < cmd.length;i++){
-            switch (cmd[i]) {
-                case "--help" -> {
-                    System.out.println(
-                            "\n\nPomodoro - сделай свое время более эффективным\n");
-                    System.out.println(
-                            "	-w <time>: время работы, сколько хочешь работать.\n");
-                    System.out.println(
-                            "	-b <time>: время отдыха, сколько хочешь отдыхать.\n");
-                    System.out.println(
-                            "	-count <count>: количество итераций.\n");
-                    System.out.println(
-                            "	--help: меню помощи.\n");
-                    help = 1;
-                }
-                case "-w" -> work = Integer.parseInt(cmd[++i]);
-                case "-b" -> breake = Integer.parseInt(cmd[++i]);
-                case "-count" -> count = Integer.parseInt(cmd[++i]);
-            }
-        }
-        if(help == 0){
-            long startTime = System.currentTimeMillis();
-            for (int i = 1; i <= count; i++) {
-                timer(work, breake, sizebreak, sizework);
-            }
-            long endTime = System.currentTimeMillis();
-            System.out.println("Pomodor таймер истек: " + (endTime-startTime)/(1000 * 60)+ " min");
-        }
+        //Отправляем запрос и получаем ответ
+        CloseableHttpResponse response = httpClient.execute(new HttpGet(URI));
 
-    }
+        //Преобразуем ответ в Java-объект NasaObject
+        NasaObject nasaObject = mapper.readValue(response.getEntity().getContent(), NasaObject.class);
+        System.out.println(nasaObject);
 
-    public static void timer(int work, int breake, int sizebreak, int sizework) throws InterruptedException{
+        // Отправляем запрос и получаем ответ с нашей картинкой
+        CloseableHttpResponse pictureResponse = httpClient.execute(new HttpGet(nasaObject.getUrl()));
 
-        printProgress("Work Progress::  ", work, sizework);
+        //Формируем автоматически название для файла
+        String[] arr = nasaObject.getUrl().split("/");
+        String fileName = arr[arr.length - 1];
 
-        printProgress("Break Progress:: ", breake, sizebreak);
-    }
+        HttpEntity entity = pictureResponse.getEntity();
 
-    private static void printProgress(String process, int time, int size) throws InterruptedException {
-        int length;
-        int rep;
-        length = 60* time / size;
-        rep = 60* time /length;
-        int stretchb = size /(3* time);
-        for(int i=1; i <= rep; i++){
-            double x = i;
-            x = 1.0/3.0 *x;
-            x *= 10;
-            x = Math.round(x);
-            x /= 10;
-            double w = time *stretchb;
-            double percent = (x/w) *1000;
-            x /=stretchb;
-            x *= 10;
-            x = Math.round(x);
-            x /= 10;
-            percent = Math.round(percent);
-            percent /= 10;
-            System.out.print(process + percent+"% " + (" ").repeat(5 - (String.valueOf(percent).length())) +"[" + ("#").repeat(i) + ("-").repeat(rep - i)+"]    ( " + x +"min / " + time +"min )"+  "\r");
-            if(test == 0){
-                TimeUnit.SECONDS.sleep(length);
-            }
-        }
-        System.out.println();
+        //сохраняем в файл
+        FileOutputStream fos = new FileOutputStream(fileName);
+        entity.writeTo(fos);
+        fos.close();
+
     }
 }
-
